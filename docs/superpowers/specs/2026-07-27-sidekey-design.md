@@ -210,6 +210,64 @@ Compose. One screen, four sections:
    including a copyable `adb` command for Tier B.
 3. **Behavior picker** — the table above.
 4. **Fix now** — writes immediately; useful for verifying without a reboot.
+5. **Report my device** — entry point to the device report screen below.
+
+### `DeviceReport`, `IssueUrlBuilder`, `ReportScreen`
+
+Because `101` is known only for one model on one One UI version, the app needs
+submissions from other Samsung devices to build a value table. Collection is opt-in,
+manual, and routed through a prefilled GitHub issue — no backend, no hosting, no stored
+user data, and submissions are public by construction.
+
+**Payload.** Every field is device/firmware metadata or a setting this app already reads:
+
+| Field | Source |
+| --- | --- |
+| model, device, build fingerprint | `Build.MODEL`, `Build.DEVICE`, `Build.FINGERPRINT` |
+| Android release | `Build.VERSION.RELEASE` |
+| One UI version | `Build.VERSION.SEM_PLATFORM_INT` via reflection; see Risk 6 |
+| CSC / sales code | firmware region, for regional-variance analysis |
+| `power_button_long_press` | as observed **before** any change by this app |
+| `function_key_config_longpress_selected_item` | Global |
+| `function_key_config_doublepress_selected_item` | Global |
+| `long_press_power_for_assist` | Secure |
+| did the fix work? | user-selected: worked / did not work / not tried |
+| app version | `BuildConfig` |
+
+Explicitly **not** collected: serial, IMEI, `ANDROID_ID`, accounts, installed apps,
+location, or any free-text field. There is nothing to redact because nothing identifying is
+gathered.
+
+**Flow.** Two explicit consent gates, nothing automatic:
+
+1. User taps *Report my device*.
+2. Screen renders the **exact** payload as read-only scrollable text — what you see is what
+   is sent.
+3. User answers the tri-state "did the fix work?".
+4. *Open GitHub issue* builds the URL and fires `Intent.ACTION_VIEW`.
+5. GitHub's own compose screen is the second gate; the user submits it themselves.
+
+Nothing is ever sent in the background, on first launch, or without both taps.
+
+**`IssueUrlBuilder`** — pure `DeviceReport -> Uri`, fully unit-testable:
+
+```
+https://github.com/<owner>/<repo>/issues/new
+  ?labels=device-report
+  &title=<model> / One UI <ver> / pblp=<observed>
+  &body=<url-encoded markdown table>
+```
+
+Owner and repo come from `BuildConfig` so forks retarget without code changes. Plain
+`issues/new` with `title` and `body` is used rather than an issue-form template, because
+form prefill requires per-field ids and breaks whenever the template changes.
+
+The title format makes duplicates searchable and groupable at a glance.
+
+**Length guard.** GitHub rejects issue URLs beyond roughly 8000 characters. The payload is
+well under 1 KB, but `IssueUrlBuilder` still returns a typed `TooLong` result above 6000
+characters; the screen then copies the body to the clipboard and opens a blank issue with
+an instruction to paste. Tested as a unit, not left to chance.
 
 ## Error handling
 
@@ -228,7 +286,9 @@ and will not know why.
 
 **JVM unit tests** — `SettingsWriter` resolution, `KeyBehaviorRepo` value mapping,
 `PinService` re-assert policy (a pure state machine over observed values), `Bootstrapper`
-state transitions. Fakes for `ContentResolver` and the Shizuku binder.
+state transitions, and `IssueUrlBuilder` (percent-encoding of `#`, `&`, newlines and
+non-ASCII; title format; the 6000-character `TooLong` boundary). Fakes for
+`ContentResolver` and the Shizuku binder.
 
 **Instrumented tests** — real write and read-back of `power_button_long_press` on a device
 with the permission granted; `ContentObserver` fires on external change.
@@ -258,6 +318,11 @@ adb shell settings get global power_button_long_press   # expect 1
    GitHub Releases / Obtainium / F-Droid.
 5. **`pm grant` is revoked on uninstall.** Reinstalling requires redoing setup; documented
    in the app.
+6. **One UI version is not a public API.** `Build.VERSION.SEM_PLATFORM_INT` is a Samsung
+   SDK addition and `SystemProperties.get` is on the non-SDK blocklist. `DeviceReport`
+   reads `SEM_PLATFORM_INT` reflectively, falls back to `ro.build.version.oneui`, then to
+   `"unknown"` — a missing One UI version degrades the report, never crashes it. Everything
+   else in the payload uses public `Build` fields.
 
 ## Out of scope
 
@@ -266,6 +331,10 @@ adb shell settings get global power_button_long_press   # expect 1
 - Root-specific framework patching.
 - Any attempt to intercept the key event itself — proven impossible above.
 - Custom power dialog UI. The system dialog is the goal.
+- A standalone web form for device reports. App-only was chosen deliberately: the in-app
+  form reads the real values off the device, so submissions are accurate by construction
+  rather than hand-transcribed.
+- Any backend, analytics, or telemetry. Device reports go to GitHub or nowhere.
 
 ## Open questions
 
