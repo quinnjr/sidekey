@@ -39,11 +39,18 @@
             </intent-filter>
         </activity>
 
+        <!--
+          directBootAware: BOOT_COMPLETED only arrives once the user unlocks — measured at
+          over three minutes after boot on SM-S928U1 — and the side key opens Bixby for that
+          entire window. LOCKED_BOOT_COMPLETED fires during direct boot and closes it.
+        -->
         <receiver
             android:name=".service.BootReceiver"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
@@ -54,6 +61,7 @@
         -->
         <service
             android:name=".service.PinService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property

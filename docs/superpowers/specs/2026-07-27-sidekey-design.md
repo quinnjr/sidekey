@@ -187,6 +187,14 @@ The UI always displays the currently observed value alongside the chosen one.
 
 ### `BootReceiver` and `PinService`
 
+Both are `directBootAware`, and `BootReceiver` listens for `LOCKED_BOOT_COMPLETED` as well
+as `BOOT_COMPLETED`. Measured: `BOOT_COMPLETED` only arrives once the user unlocks — three
+minutes after boot in one run — and the side key opens Bixby for that entire window. The
+locked broadcast fires during direct boot and cuts the gap to 8.1 seconds. `DesiredBehaviorStore`
+therefore lives in device-protected storage, since credential-protected storage is
+unreadable before first unlock. Both broadcasts are handled: the pair is idempotent, and the
+locked variant is not guaranteed on every OEM.
+
 `BootReceiver` does **not** write on receipt. It starts `PinService`, which:
 
 1. Registers a `ContentObserver` on `Settings.Global.getUriFor("power_button_long_press")`.
@@ -310,10 +318,11 @@ adb shell settings get global power_button_long_press   # expect 1
 
 ## Risks
 
-1. **`RestrictedReceiverFilter` may drop our `BOOT_COMPLETED`.** Untested — the boot log
-   shows Samsung filtering it for dozens of packages. Mitigation: exempt from battery
-   optimization and "Sleeping apps"; fall back to a persistent foreground service. This is
-   the first thing to verify during implementation.
+1. ~~**`RestrictedReceiverFilter` may drop our `BOOT_COMPLETED`.**~~ **Resolved 2026-07-27.**
+   Verified on SM-S928U1: zero `RestrictedReceiverFilter` entries naming the package across
+   two reboots, and both `LOCKED_BOOT_COMPLETED` and `BOOT_COMPLETED` were delivered. The
+   foreground service was kept regardless, since it is also what makes the direct-boot path
+   reliable.
 2. **`101` is device- and version-specific.** Other Samsung models or One UI versions may
    use a different value. Mitigated by the raw-int field and by always displaying the
    observed value.
