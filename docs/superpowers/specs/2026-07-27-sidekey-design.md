@@ -252,15 +252,20 @@ Nothing is ever sent in the background, on first launch, or without both taps.
 **`IssueUrlBuilder`** — pure `DeviceReport -> Uri`, fully unit-testable:
 
 ```
-https://github.com/<owner>/<repo>/issues/new
+https://github.com/quinnjr/sidekey/issues/new
   ?labels=device-report
   &title=<model> / One UI <ver> / pblp=<observed>
   &body=<url-encoded markdown table>
 ```
 
-Owner and repo come from `BuildConfig` so forks retarget without code changes. Plain
-`issues/new` with `title` and `body` is used rather than an issue-form template, because
-form prefill requires per-field ids and breaks whenever the template changes.
+The repository is **`quinnjr/sidekey`**, supplied to `IssueUrlBuilder` from
+`BuildConfig.REPORT_REPO` (default `"quinnjr/sidekey"`, overridable per build type) so forks
+retarget without code changes. Plain `issues/new` with `title` and `body` is used rather
+than an issue-form template, because form prefill requires per-field ids and breaks
+whenever the template changes.
+
+The `device-report` label must exist in the repo before the first submission, otherwise
+GitHub silently drops the `labels` parameter.
 
 The title format makes duplicates searchable and groupable at a glance.
 
