@@ -48,7 +48,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
-    compileOnly(libs.shizuku.api)
+    // Not compileOnly: ShizukuEnv touches these at runtime during bootstrap.
+    implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 
     testImplementation(libs.junit.jupiter)
